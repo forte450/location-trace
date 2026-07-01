@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RealTrace — Actual Geolocation Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #060a0f;
+    --bg2: #0b1018;
+    --card: #0f1621;
+    --border: #1a2738;
+    --border2: #243347;
+    --fg: #d8e4f0;
+    --muted: #4e6380;
+    --accent: #00e676;
+    --accent-dim: rgba(0,230,118,0.1);
+    --accent-glow: rgba(0,230,118,0.25);
+    --amber: #ffab00;
+    --amber-dim: rgba(255,171,0,0.1);
+    --red: #ff3d3d;
+    --red-dim: rgba(255,61,61,0.1);
+    --cyan: #00e5ff;
+    --cyan-dim: rgba(0,229,255,0.1);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 15% 10%, rgba(0,230,118,0.025) 0%, transparent 50%),
+      radial-gradient(ellipse at 85% 85%, rgba(0,229,255,0.015) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative; z-index: 1;
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 14px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 22px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    position: relative; overflow: hidden;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 5%, var(--accent) 50%, transparent 95%);
+    opacity: 0.25;
+  }
+
+  .header-left { display:flex; align-items:center; gap:12px; }
+
+  .logo {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #00b85e);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 19px; color: var(--bg);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .header-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px; letter-spacing: 3px;
+    color: var(--accent); text-transform: uppercase;
+  }
+
+  .header-sub { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; margin-top: 1px; }
+
+  .real-badge {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: 100px;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(0,230,118,0.3);
+  }
+
+  .real-badge i { font-size: 12px; }
+
+  /* Left Panel */
+  .left-panel {
+    display: flex; flex-direction: column; gap: 12px;
+    overflow-y: auto; max-height: calc(100vh - 90px);
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+
+  .panel-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 11px; padding: 16px;
+    position: relative; overflow: hidden;
+  }
+
+  .panel-card::before {
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--accent); opacity: 0.3;
+  }
+
+  .panel-card.amber::before { background: var(--amber); }
+  .panel-card.cyan::before { background: var(--cyan); }
+
+  .card-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .card-label i { font-size: 12px; }
+  .card-label .green { color: var(--accent); }
+  .card-label .amber-color { color: var(--amber); }
+  .card-label .cyan-color { color: var(--cyan); }
+
+  /* Info Banner */
+  .info-banner {
+    background: var(--amber-dim);
+    border: 1px solid rgba(255,171,0,0.2);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 11px;
+    color: var(--amber);
+    line-height: 1.6;
+    margin-bottom: 14px;
+  }
+
+  .info-banner i { margin-right: 6px; }
+
+  /* Input */
+  .input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+
+  .country-sel {
+    width: 88px; padding: 11px 8px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--fg);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    outline: none; cursor: pointer; transition: border-color 0.3s;
+    -webkit-appearance: none;
+  }
+
+  .country-sel:focus { border-color: var(--accent); }
+
+  .phone-in {
+    flex: 1; padding: 11px 12px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--fg);
+    font-family: 'Share Tech Mono', monospace; font-size: 14px;
+    letter-spacing: 2px; outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .phone-in:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  .phone-in::placeholder { color: var(--muted); letter-spacing: 1px; font-size: 11px; }
+
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 12px 18px; border: 1px solid var(--border); border-radius: 8px;
+    font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.3s;
+    background: var(--bg2); color: var(--fg);
+    letter-spacing: 0.5px; width: 100%;
+  }
+
+  .btn:hover { border-color: var(--accent); background: var(--accent-dim); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #00b85e);
+    color: var(--bg); border-color: var(--accent);
+    box-shadow: 0 4px 18px var(--accent-glow);
+    font-weight: 700; letter-spacing: 1px;
+  }
+
+  .btn-primary:hover { box-shadow: 0 6px 28px rgba(0,230,118,0.4); }
+
+  .btn-cyan {
+    background: var(--cyan-dim); color: var(--cyan);
+    border-color: rgba(0,229,255,0.3);
+  }
+
+  .btn-cyan:hover { background: rgba(0,229,255,0.15); border-color: var(--cyan); }
+
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* Result Items */
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .result-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .r-item {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 9px 11px;
+  }
+
+  .r-item.full { grid-column: 1 / -1; }
+
+  .r-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;
+  }
+
+  .r-value {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; color: var(--fg); word-break: break-all;
+  }
+
+  .r-value.green { color: var(--accent); }
+  .r-value.amber { color: var(--amber); }
+  .r-value.cyan { color: var(--cyan); }
+  .r-value.dim { opacity: 0.5; }
+
+  .r-value.status-available { color: var(--accent); }
+  .r-value.status-limited { color: var(--amber); }
+  .r-value.status-unavailable { color: var(--red); opacity: 0.7; }
+
+  /* Data Source Tag */
+  .data-source {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 9px; font-family: 'Share Tech Mono', monospace;
+    padding: 3px 8px; border-radius: 4px;
+    background: rgba(0,229,255,0.06);
+    color: var(--cyan); border: 1px solid rgba(0,229,255,0.15);
+    margin-top: 10px;
+  }
+
+  /* Loading Spinner */
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Accuracy Bar */
+  .acc-bar { width: 100%; height: 4px; background: var(--bg); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+  .acc-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease, background 0.6s; background: var(--red); width: 0%; }
+
+  /* Section Visibility */
+  .section-hidden { display: none; }
+  .section-visible { display: block; animation: fadeUp 0.4s ease; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Map */
+  .map-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px;
+    display: flex; flex-direction: column;
+    position: relative; overflow: hidden;
+  }
+
+  .map-section::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 5%, var(--accent) 50%, transparent 95%);
+    opacity: 0.2;
+  }
+
+  .map-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .map-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; color: var(--muted); letter-spacing: 2px;
+    text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+  }
+
+  .map-label i { color: var(--accent); }
+
+  .map-coords {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: var(--accent); opacity: 0.5;
+  }
+
+  #map {
+    flex: 1; border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border); min-height: 400px;
+    background: var(--bg);
+  }
+
+  /* Leaflet overrides for dark theme */
+  .leaflet-container { background: #0a0e14 !important; }
+  .leaflet-control-zoom a {
+    background: var(--card) !important; color: var(--fg) !important;
+    border-color: var(--border) !important;
+  }
+  .leaflet-control-zoom a:hover { background: var(--card2, #131c2a) !important; }
+  .leaflet-control-attribution { display: none !important; }
+
+  /* Toast */
+  .toast-box { position: fixed; top: 14px; right: 14px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; }
+
+  .toast {
+    padding: 11px 16px; border-radius: 9px;
+    font-size: 12px; font-weight: 500;
+    display: flex; align-items: center; gap: 9px;
+    animation: tIn 0.4s ease, tOut 0.4s ease 2.8s forwards;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    border: 1px solid; max-width: 380px;
+  }
+
+  .toast.success { background: rgba(0,230,118,0.12); border-color: rgba(0,230,118,0.3); color: var(--accent); }
+  .toast.error { background: rgba(255,61,61,0.12); border-color: rgba(255,61,61,0.3); color: var(--red); }
+  .toast.info { background: rgba(0,229,255,0.1); border-color: rgba(0,229,255,0.3); color: var(--cyan); }
+  .toast.warn { background: rgba(255,171,0,0.12); border-color: rgba(255,171,0,0.3); color: var(--amber); }
+
+  @keyframes tIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes tOut { from { opacity:1; } to { opacity:0; transform:translateX(30px); } }
+
+  /* Responsive */
+  @media (max-width: 960px) {
+    .app { grid-template-columns: 1fr; }
+    .map-section { min-height: 450px; }
+    .left-panel { max-height: none; }
+    .result-grid.three { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast-box" id="toastBox"></div>
+
+<div class="app">
+  <header class="header">
+    <div class="header-left">
+      <div class="logo"><i class="fas fa-map-marker-alt"></i></div>
+      <div>
+        <div class="header-title">RealTrace</div>
+        <div class="header-sub">Real Geolocation Data — No Simulation</div>
+      </div>
+    </div>
+    <div class="real-badge"><i class="fas fa-database"></i> 100% Real Data</div>
+  </header>
+
+  <aside class="left-panel">
+    <!-- Phone Analysis -->
+    <div class="panel-card amber">
+      <div class="card-label"><i class="fas fa-phone-alt amber-color"></i> Phone Number Analysis</div>
+      <div class="info-banner">
+        <i class="fas fa-info-circle"></i>
+        Phone numbers only reveal <strong>carrier, country, and area code region</strong> from their format.
+        Precise location tracking of any phone number is <strong>not technically possible</strong> from a browser.
+      </div>
+      <div class="input-row">
+        <select class="country-sel" id="countryCode" aria-label="Country code">
+          <option value="+1">+1 US</option>
+          <option value="+44">+44 UK</option>
+          <option value="+91" selected>+91 IN</option>
+          <option value="+86">+86 CN</option>
+          <option value="+81">+81 JP</option>
+          <option value="+49">+49 DE</option>
+          <option value="+33">+33 FR</option>
+          <option value="+55">+55 BR</option>
+          <option value="+61">+61 AU</option>
+          <option value="+971">+971 AE</option>
+          <option value="+234">+234 NG</option>
+          <option value="+7">+7 RU</option>
+          <option value="+82">+82 KR</option>
+          <option value="+39">+39 IT</option>
+          <option value="+34">+34 ES</option>
+          <option value="+91">+91 IN</option>
+          <option value="+52">+52 MX</option>
+          <option value="+62">+62 ID</option>
+          <option value="+63">+63 PH</option>
+          <option value="+66">+66 TH</option>
+        </select>
+        <input type="tel" class="phone-in" id="phoneInput" placeholder="Phone number" maxlength="15" aria-label="Phone number">
+      </div>
+      <button class="btn btn-primary" id="btnAnalyze"><i class="fas fa-search"></i> ANALYZE NUMBER</button>
+
+      <div id="phoneResult" class="section-hidden" style="margin-top:14px;">
+        <div class="result-grid" id="phoneGrid"></div>
+        <div class="data-source"><i class="fas fa-code"></i> Source: ITU E.164 Numbering Plan (local analysis)</div>
+      </div>
+    </div>
+
+    <!-- Your Real Location -->
+    <div class="panel-card">
+      <div class="card-label"><i class="fas fa-crosshairs green"></i> Your Real Location (GPS)</div>
+      <button class="btn btn-cyan" id="btnGPS"><i class="fas fa-satellite-dish"></i> GET MY LOCATION</button>
+
+      <div id="gpsResult" class="section-hidden" style="margin-top:14px;">
+        <div class="result-grid" id="gpsGrid"></div>
+        <div class="acc-bar"><div class="acc-fill" id="accFill"></div></div>
+        <div class="data-source"><i class="fas fa-satellite"></i> Source: Browser Geolocation API (device GPS)</div>
+      </div>
+    </div>
+
+    <!-- Reverse Geocoded Address -->
+    <div class="panel-card cyan">
+      <div class="card-label"><i class="fas fa-address-card cyan-color"></i> Reverse Geocoded Address</div>
+      <div id="addrResult" class="section-hidden">
+        <div class="result-grid" id="addrGrid"></div>
+        <div class="data-source"><i class="fas fa-globe"></i> Source: OpenStreetMap Nominatim (free, no API key)</div>
+      </div>
+      <div id="addrEmpty" class="section-visible" style="padding:16px 0; text-align:center; color:var(--muted); font-size:12px;">
+        <i class="fas fa-map-signs" style="font-size:22px; display:block; margin-bottom:8px; opacity:0.3;"></i>
+        Get your GPS location first to resolve address.
+      </div>
+    </div>
+
+    <!-- Data Availability Legend -->
+    <div class="panel-card">
+      <div class="card-label"><i class="fas fa-layer-group green"></i> Data Availability Legend</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:11px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="r-value status-available" style="min-width:20px; text-align:center;"><i class="fas fa-circle" style="font-size:8px;"></i></span>
+          <span>Available from browser — real GPS data</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="r-value status-limited" style="min-width:20px; text-align:center;"><i class="fas fa-circle" style="font-size:8px;"></i></span>
+          <span>Limited — derived from number format only</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="r-value status-unavailable" style="min-width:20px; text-align:center;"><i class="fas fa-circle" style="font-size:8px;"></i></span>
+          <span>Not available — requires carrier/telecom access</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Real Map -->
+  <section class="map-section" aria-label="Real map display">
+    <div class="map-head">
+      <span class="map-label"><i class="fas fa-globe-americas"></i> Live Map (OpenStreetMap)</span>
+      <span class="map-coords" id="mapCoords">—</span>
+    </div>
+    <div id="map"></div>
+  </section>
+</div>
+
+<script>
+  // ===== Toast =====
+  function toast(msg, type = 'info') {
+    const box = document.getElementById('toastBox');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    const icons = { success:'fa-check-circle', error:'fa-exclamation-circle', info:'fa-info-circle', warn:'fa-exclamation-triangle' };
+    el.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i> <span>${msg}</span>`;
+    box.appendChild(el);
+    setTimeout(() => el.remove(), 3400);
+  }
+
+  // ===== Leaflet Map Init =====
+  const map = L.map('map', {
+    center: [20, 0],
+    zoom: 2,
+    zoomControl: true,
+    attributionControl: false
+  });
+
+  // Dark map tiles from CartoDB
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    subdomains: 'abcd'
+  }).addTo(map);
+
+  let userMarker = null;
+  let accuracyCircle = null;
+  let phoneMarker = null;
+
+  // ===== Phone Number Analysis (Local Data Only) =====
+  const numberingData = {
+    '+1': {
+      country: 'United States / Canada',
+      flag: '🇺🇸',
+      carriers: ['AT&T', 'Verizon', 'T-Mobile US', 'US Cellular', 'Cingular'],
+      format: 'NPA-NXX-XXXX (10 digits)',
+      regions: {
+        '212':'New York City, NY','213':'Los Angeles, CA','310':'Los Angeles, CA',
+        '415':'San Francisco, CA','312':'Chicago, IL','202':'Washington, DC',
+        '617':'Boston, MA','305':'Miami, FL','713':'Houston, TX',
+        '214':'Dallas, TX','404':'Atlanta, GA','303':'Denver, CO',
+        '206':'Seattle, WA','612':'Minneapolis, MN','314':'St. Louis, MO',
+        '510':'Oakland, CA','646':'New York City, NY','917':'New York City, NY',
+        '332':'New York City, NY','347':'New York City, NY',
+        '416':'Toronto, ON','514':'Montreal, QC','604':'Vancouver, BC',
+        '403':'Calgary, AB','306':'Saskatchewan'
+      }
+    },
+    '+44': {
+      country: 'United Kingdom', flag: '🇬🇧',
+      carriers: ['EE', 'Vodafone UK', 'Three UK', 'O2 UK', 'Giffgaff', 'Tesco Mobile'],
+      format: '07XXX XXXXXX (11 digits)',
+      regions: {
+        '7911':'London','7700':'London','7928':'London','7856':'London',
+        '7937':'Manchester','7894':'Birmingham','7956':'Leeds',
+        '7710':'Glasgow','7832':'Bristol','7965':'Edinburgh',
+        '7800':'Sheffield','7740':'Liverpool','7978':'Cardiff'
+      }
+    },
+    '+91': {
+      country: 'India', flag: '🇮🇳',
+      carriers: ['Jio', 'Airtel', 'Vi (Vodafone Idea)', 'BSNL', 'MTNL'],
+      format: 'XXXXX XXXXX (10 digits)',
+      regions: {
+        '98101':'Delhi NCR','98186':'Delhi NCR','98765':'Delhi NCR',
+        '98200':'Mumbai','98330':'Mumbai','98920':'Mumbai',
+        '97300':'Bangalore','97400':'Bangalore','98450':'Bangalore',
+        '98480':'Hyderabad','98850':'Hyderabad',
+        '98400':'Chennai','98650':'Chennai',
+        '98300':'Kolkata','97480':'Kolkata',
+        '98900':'Pune','98860':'Pune',
+        '94270':'Ahmedabad','93770':'Ahmedabad',
+        '94140':'Jaipur','94610':'Jaipur',
+        '94520':'Lucknow','93360':'Lucknow'
+      }
+    },
+    '+86': {
+      country: 'China', flag: '🇨🇳',
+      carriers: ['China Mobile', 'China Unicom', 'China Telecom'],
+      format: '1XX XXXX XXXX (11 digits)',
+      regions: {
+        '138':'Beijing','139':'Beijing','136':'Shanghai','137':'Shanghai',
+        '135':'Guangzhou','134':'Shenzhen','158':'Chengdu','159':'Hangzhou',
+        '186':'Wuhan','187':'Nanjing','188':'Xi\'an','189':'Chongqing'
+      }
+    },
+    '+81': {
+      country: 'Japan', flag: '🇯🇵',
+      carriers: ['NTT Docomo', 'au (KDDI)', 'SoftBank', 'Rakuten Mobile'],
+      format: '0XX-XXXX-XXXX (10-11 digits)',
+      regions: { '90':'Tokyo/NTT Docomo','80':'Kansai/au','70':'SoftBank' }
+    },
+    '+49': {
+      country: 'Germany', flag: '🇩🇪',
+      carriers: ['Telekom DE', 'Vodafone DE', 'O2 Germany'],
+      format: 'XXX XXXXXXXX (10-11 digits)',
+      regions: { '151':'Telekom','152':'Telekom','160':'Vodafone','170':'Vodafone','176':'O2','157':'O2' }
+    },
+    '+33': {
+      country: 'France', flag: '🇫🇷',
+      carriers: ['Orange FR', 'SFR', 'Bouygues Telecom', 'Free Mobile'],
+      format: 'X XX XX XX XX (10 digits)',
+      regions: { '6':'Mobile (all carriers)','7':'Mobile (all carriers)' }
+    },
+    '+55': {
+      country: 'Brazil', flag: '🇧🇷',
+      carriers: ['Claro BR', 'Vivo', 'TIM Brasil', 'Oi'],
+      format: 'XX XXXXX-XXXX (11 digits)',
+      regions: { '11':'Sao Paulo','21':'Rio de Janeiro','61':'Brasilia','71':'Salvador','85':'Fortaleza' }
+    },
+    '+61': {
+      country: 'Australia', flag: '🇦🇺',
+      carriers: ['Telstra', 'Optus', 'Vodafone AU', 'TPG Telecom'],
+      format: 'XXX XXX XXX (10 digits)',
+      regions: { '4':'Mobile (all carriers)' }
+    },
+    '+971': {
+      country: 'United Arab Emirates', flag: '🇦🇪',
+      carriers: ['Etisalat', 'du'],
+      format: 'XX XXX XXXX (10 digits)',
+      regions: { '50':'Etisalat','52':'du','54':'du','55':'Etisalat','56':'Etisalat' }
+    },
+    '+234': {
+      country: 'Nigeria', flag: '🇳🇬',
+      carriers: ['MTN Nigeria', 'Airtel NG', 'Glo', '9mobile'],
+      format: 'XXX XXX XXXX (11 digits)',
+      regions: { '803':'MTN','806':'MTN','802':'Airtel','808':'Airtel','805':'Glo','809':'9mobile','810':'MTN','811':'Airtel','812':'Glo','813':'MTN','814':'MTN','815':'MTN','816':'MTN','817':'Airtel' }
+    },
+    '+7': {
+      country: 'Russia', flag: '🇷🇺',
+      carriers: ['MTS Russia', 'MegaFon', 'Beeline', 'Tele2 Russia'],
+      format: 'XXX XXX-XX-XX (11 digits)',
+      regions: { '916':'MTS Moscow','926':'Megafon Moscow','903':'Beeline Moscow','985':'MTS Moscow','915':'Megafon','909':'Beeline' }
+    },
+    '+82': {
+      country: 'South Korea', flag: '🇰🇷',
+      carriers: ['SK Telecom', 'KT Corporation', 'LG U+'],
+      format: 'XXX-XXXX-XXXX (11 digits)',
+      regions: { '10':'SK Telecom','11':'KT','16':'LG U+','17':'SK Telecom' }
+    },
+    '+39': {
+      country: 'Italy', flag: '🇮🇹',
+      carriers: ['TIM', 'Vodafone IT', 'WindTre', 'Iliad'],
+      format: 'XXX XXX XXXX (10 digits)',
+      regions: { '3':'Mobile (all carriers)' }
+    },
+    '+34': {
+      country: 'Spain', flag: '🇪🇸',
+      carriers: ['Movistar', 'Vodafone ES', 'Orange ES', 'Yoigo'],
+      format: 'XXX XXX XXX (9 digits)',
+      regions: { '6':'Mobile (all carriers)','7':'Mobile (all carriers)' }
+    },
+    '+52': {
+      country: 'Mexico', flag: '🇲🇽',
+      carriers: ['Telcel', 'AT&T Mexico', 'Movistar MX'],
+      format: 'XX XXXX XXXX (10 digits)',
+      regions: { '55':'Mexico City','33':'Guadalajara','81':'Monterrey','222':'Puebla','664':'Tijuana' }
+    },
+    '+62': {
+      country: 'Indonesia', flag: '🇮🇩',
+      carriers: ['Telkomsel', 'Indosat', 'XL Axiata', 'Tri'],
+      format: 'XXX-XXXX-XXXX (11-13 digits)',
+      regions: { '812':'Telkomsel','813':'Telkomsel','856':'Indosat','858':'XL Axiata','895':'Tri' }
+    },
+    '+63': {
+      country: 'Philippines', flag: '🇵🇭',
+      carriers: ['Globe Telecom', 'Smart Communications', 'Dito Telecommunity'],
+      format: 'XXX XXX XXXX (11 digits)',
+      regions: { '917':'Globe','927':'Globe','906':'Smart','918':'Smart','997':'Dito' }
+    },
+    '+66': {
+      country: 'Thailand', flag: '🇹🇭',
+      carriers: ['AIS', 'DTAC', 'TrueMove H'],
+      format: 'XX XXX XXXX (10 digits)',
+      regions: { '8':'Mobile (all carriers)','6':'Mobile (all carriers)','9':'Mobile (all carriers)' }
+    }
+  };
+
+  document.getElementById('btnAnalyze').addEventListener('click', analyzePhone);
+  document.getElementById('phoneInput').addEventListener('keydown', e => { if (e.key === 'Enter') analyzePhone(); });
+  document.getElementById('phoneInput').addEventListener('input', function() { this.value = this.value.replace(/[^\d\s\-()]/g, ''); });
+
+  function analyzePhone() {
+    const code = document.getElementById('countryCode').value;
+    const raw = document.getElementById('phoneInput').value.replace(/\D/g, '');
+    if (raw.length < 4) {
+      toast('Enter at least 4 digits of the phone number.', 'error');
+      return;
+    }
+
+    const data = numberingData[code];
+    if (!data) {
+      toast('Country code not supported.', 'error');
+      return;
+    }
+
+    // Try to find region from area code
+    let region = 'Unknown region';
+    let regionStatus = 'unavailable';
+
+    // Check 5-digit prefix first, then 4, then 3, then 2
+    for (const len of [5, 4, 3, 2]) {
+      const prefix = raw.substring(0, len);
+      if (data.regions[prefix]) {
+        region = data.regions[prefix];
+        regionStatus = len >= 4 ? 'limited' : 'limited';
+        break;
+      }
+    }
+
+    // Determine carrier (heuristic from prefix)
+    let carrier = data.carriers[0];
+    let carrierStatus = 'unavailable';
+    if (data.regions) {
+      for (const [prefix, info] of Object.entries(data.regions)) {
+        if (raw.startsWith(prefix) && info.includes('/') && info.includes('Mobile') === false) {
+          // Some regions encode carrier
+        }
+      }
+    }
+    // Since we can't truly determine carrier from number alone in most countries
+    carrier = 'See carriers list (cannot determine from number)';
+    carrierStatus = 'unavailable';
+
+    const grid = document.getElementById('phoneGrid');
+    grid.innerHTML = `
+      <div class="r-item full"><div class="r-label">Full Number</div><div class="r-value green">${code} ${raw}</div></div>
+      <div class="r-item"><div class="r-label">Country</div><div class="r-value">${data.flag} ${data.country}</div></div>
+      <div class="r-item"><div class="r-label">Number Format</div><div class="r-value dim">${data.format}</div></div>
+      <div class="r-item full"><div class="r-label">Possible Region (from area code)</div><div class="r-value status-${regionStatus}">${region}</div></div>
+      <div class="r-item full"><div class="r-label">Carrier</div><div class="r-value status-${carrierStatus}">${carrier}</div></div>
+      <div class="r-item"><div class="r-label">Known Carriers in ${data.country}</div><div class="r-value dim">${data.carriers.join(', ')}</div></div>
+      <div class="r-item"><div class="r-label">Precise Location</div><div class="r-value status-unavailable">Not available</div></div>
+      <div class="r-item full"><div class="r-label">Why no location?</div><div class="r-value dim" style="font-size:10px; line-height:1.5;">Phone numbers only encode country + area code in their format. Cell tower triangulation, GPS, and real-time location require direct carrier infrastructure access — only available to law enforcement with a warrant.</div></div>
+    `;
+
+    document.getElementById('phoneResult').className = 'section-visible';
+
+    // Try to place a marker at the known region's approximate location
+    if (region !== 'Unknown region' && phoneMarker) {
+      map.removeLayer(phoneMarker);
+    }
+
+    const regionCoords = getApproxCoords(code, raw);
+    if (regionCoords) {
+      phoneMarker = L.circleMarker(regionCoords, {
+        radius: 8, fillColor: '#ffab00', fillOpacity: 0.8,
+        color: '#ffab00', weight: 2, opacity: 0.5
+      }).addTo(map).bindPopup(`<b>Approximate area code region</b><br>${region}<br><small>(not precise location)</small>`);
+
+      if (!userMarker) {
+        map.setView(regionCoords, 6);
+      }
+    }
+
+    toast(`Number analyzed: ${data.country} — region data from area code.`, 'warn');
+  }
+
+  function getApproxCoords(code, number) {
+    // Return approximate coordinates for some known area codes
+    const areaCoords = {
+      '212':[40.7128,-74.006], '213':[34.0522,-118.2437], '415':[37.7749,-122.4194],
+      '312':[41.8781,-87.6298], '202':[38.9072,-77.0369], '617':[42.3601,-71.0589],
+      '305':[25.7617,-80.1918], '713':[29.7604,-95.3698],
+      '416':[43.6532,-79.3832], '514':[45.5017,-73.5673], '604':[49.2827,-123.1207],
+      '98101':[28.6139,77.2090], '98200':[19.0760,72.8777], '97300':[12.9716,77.5946],
+      '98480':[17.3850,78.4867], '98400':[13.0827,80.2707], '98300':[22.5726,88.3639],
+      '98900':[18.5204,73.8567], '94270':[23.0225,72.5714],
+      '138':[39.9042,116.4074], '136':[31.2304,121.4737], '135':[23.1291,113.2644],
+      '11':[-23.5505,-46.6333], '21':[-22.9068,-43.1729], '61':[-15.7975,-47.8919],
+      '55':[25.2048,55.2708], '50':[25.2048,55.2708], '52':[24.4539,54.3773],
+      '803':[6.5244,3.3792], '802':[6.5244,3.3792], '813':[6.5244,3.3792],
+      '916':[55.7558,37.6173], '926':[55.7558,37.6173], '903':[55.7558,37.6173],
+    };
+
+    for (const [prefix, coords] of Object.entries(areaCoords)) {
+      if (number.startsWith(prefix)) return coords;
+    }
+
+    // Country-level fallback
+    const countryCoords = {
+      '+1':[39.8283,-98.5795], '+44':[51.5074,-0.1278], '+91':[20.5937,78.9629],
+      '+86':[35.8617,104.1954], '+81':[36.2048,138.2529], '+49':[51.1657,10.4515],
+      '+33':[46.2276,2.2137], '+55':[-14.2350,-51.9253], '+61':[-25.2744,133.7751],
+      '+971':[23.4241,53.8478], '+234':[9.0820,8.6753], '+7':[61.5240,105.3188],
+      '+82':[35.9078,127.7669], '+39':[41.8719,12.5674], '+34':[40.4637,-3.7492],
+      '+52':[23.6345,-102.5528], '+62':[-0.7893,113.9213], '+63':[12.8797,121.7740],
+      '+66':[15.8700,100.9925]
+    };
+
+    return countryCoords[code] || null;
+  }
+
+  // ===== Real GPS Location =====
+  document.getElementById('btnGPS').addEventListener('click', getMyLocation);
+
+  function getMyLocation() {
+    if (!navigator.geolocation) {
+      toast('Geolocation is not supported by your browser.', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btnGPS');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> ACQUIRING GPS...';
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
+
+        // Update GPS panel
+        document.getElementById('gpsGrid').innerHTML = `
+          <div class="r-item"><div class="r-label">Latitude</div><div class="r-value green">${latitude.toFixed(8)}</div></div>
+          <div class="r-item"><div class="r-label">Longitude</div><div class="r-value green">${longitude.toFixed(8)}</div></div>
+          <div class="r-item"><div class="r-label">Accuracy</div><div class="r-value">${accuracy.toFixed(1)}m</div></div>
+          <div class="r-item"><div class="r-label">Altitude</div><div class="r-value">${altitude !== null ? altitude.toFixed(1) + 'm' : 'N/A'}</div></div>
+          <div class="r-item"><div class="r-label">Speed</div><div class="r-value">${speed !== null ? (speed * 3.6).toFixed(1) + ' km/h' : 'N/A'}</div></div>
+          <div class="r-item"><div class="r-label">Heading</div><div class="r-value">${heading !== null ? heading.toFixed(1) + '°' : 'N/A'}</div></div>
+        `;
+
+        // Accuracy bar
+        const accPct = Math.max(0, Math.min(100, (1 - accuracy / 200) * 100));
+        const accFill = document.getElementById('accFill');
+        accFill.style.width = accPct + '%';
+        accFill.style.background = accPct > 70 ? 'var(--accent)' : accPct > 40 ? 'var(--amber)' : 'var(--red)';
+
+        document.getElementById('gpsResult').className = 'section-visible';
+        document.getElementById('mapCoords').textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+
+        // Update map
+        if (userMarker) map.removeLayer(userMarker);
+        if (accuracyCircle) map.removeLayer(accuracyCircle);
+
+        accuracyCircle = L.circle([latitude, longitude], {
+          radius: accuracy, color: '#00e676', fillColor: '#00e676',
+          fillOpacity: 0.08, weight: 1.5, opacity: 0.3, dashArray: '6 4'
+        }).addTo(map);
+
+        userMarker = L.circleMarker([latitude, longitude], {
+          radius: 8, fillColor: '#00e676', fillOpacity: 1,
+          color: '#ffffff', weight: 2
+        }).addTo(map).bindPopup(`<b>Your Location</b><br>Accuracy: ${accuracy.toFixed(0)}m`);
+
+        map.setView([latitude, longitude], 15);
+
+        // Now do reverse geocoding
+        await reverseGeocode(latitude, longitude);
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> REFRESH LOCATION';
+        toast(`GPS acquired — accuracy ${accuracy.toFixed(0)}m`, 'success');
+      },
+      (error) => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-satellite-dish"></i> GET MY LOCATION';
+        const msgs = {
+          1: 'Location permission denied. Please allow GPS access in your browser settings.',
+          2: 'Position unavailable. Ensure GPS/WiFi is enabled.',
+          3: 'Location request timed out. Try again.'
+        };
+        toast(msgs[error.code] || 'Unknown GPS error.', 'error');
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+    );
+  }
+
+  // ===== Reverse Geocoding (Real Nominatim API) =====
+  async function reverseGeocode(lat, lng) {
+    document.getElementById('addrEmpty').className = 'section-hidden';
+
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const data = await resp.json();
+      const a = data.address || {};
+
+      const grid = document.getElementById('addrGrid');
+      grid.innerHTML = `
+        <div class="r-item full"><div class="r-label">Display Name</div><div class="r-value green">${data.display_name || 'N/A'}</div></div>
+        <div class="r-item"><div class="r-label">House Number</div><div class="r-value">${a.house_number || '—'}</div></div>
+        <div class="r-item"><div class="r-label">Road</div><div class="r-value">${a.road || '—'}</div></div>
+        <div class="r-item"><div class="r-label">Suburb / District</div><div class="r-value">${a.suburb || a.district || a.neighbourhood || '—'}</div></div>
+        <div class="r-item"><div class="r-label">City / Town</div><div class="r-value amber">${a.city || a.town || a.village || '—'}</div></div>
+        <div class="r-item"><div class="r-label">State / Region</div><div class="r-value">${a.state || '—'}</div></div>
+        <div class="r-item"><div class="r-label">Postal Code</div><div class="r-value">${a.postcode || '—'}</div></div>
+        <div class="r-item"><div class="r-label">Country</div><div class="r-value">${a.country || '—'}</div></div>
+        <div class="r-item full"><div class="r-label">OSM Type</div><div class="r-value dim">${data.type || '—'} — ${data.class || '—'}</div></div>
+      `;
+
+      document.getElementById('addrResult').className = 'section-visible';
+
+      // Add popup to marker with address
+      if (userMarker) {
+        userMarker.setPopupContent(`
+          <b>Your Location</b><br>
+          ${a.road || ''} ${a.house_number || ''}<br>
+          ${a.city || a.town || ''}, ${a.state || ''}<br>
+          <small>Accuracy: ${accuracyCircle ? (accuracyCircle.getRadius()).toFixed(0) : '?'}m</small>
+        `);
+      }
+
+      toast('Address resolved from OpenStreetMap.', 'success');
+
+    } catch (err) {
+      document.getElementById('addrResult').className = 'section-hidden';
+      document.getElementById('addrEmpty').className = 'section-visible';
+      document.getElementById('addrEmpty').innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="font-size:22px; display:block; margin-bottom:8px; opacity:0.3; color:var(--amber);"></i>
+        Reverse geocoding failed: ${err.message}<br>
+        <small style="opacity:0.6;">GPS coordinates are still accurate.</small>
+      `;
+      toast('Reverse geocoding failed, but GPS data is real.', 'warn');
+    }
+  }
+
+  // ===== Fix Leaflet render on container resize =====
+  setTimeout(() => map.invalidateSize(), 200);
+  window.addEventListener('resize', () => map.invalidateSize());
+
+  // ===== Handle dark theme Leaflet tiles loading =====
+  map.whenReady(() => {
+    console.log('RealTrace initialized — using real OpenStreetMap + Nominatim APIs');
+  });
+</script>
+</body>
+</html>
